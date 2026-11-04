@@ -59,8 +59,9 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
   }
 
   router.post('/posts/with-photos', requireAuth, contentLimiter, photoUpload, async (req, res, next) => {
-    const client = await pool.connect()
+    let client
     try {
+      client = await pool.connect()
       const body = typeof req.body.body === 'string' ? req.body.body.trim() : ''
       const classId = req.body.classId ? String(req.body.classId) : null
       const files = req.files || []
@@ -79,15 +80,21 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
 
       const processedPhotos = []
       for (const file of files) {
-        const metadata = await sharp(file.buffer, { limitInputPixels: 40000000, failOn: 'error' }).metadata()
-        if (!['jpeg', 'png', 'webp'].includes(metadata.format || '') || !metadata.width || !metadata.height) {
-          return res.status(400).json({ error: 'Файл не є підтримуваним зображенням.' })
+        let metadata
+        let optimized
+        try {
+          metadata = await sharp(file.buffer, { limitInputPixels: 40000000, failOn: 'error' }).metadata()
+          if (!['jpeg', 'png', 'webp'].includes(metadata.format || '') || !metadata.width || !metadata.height) {
+            return res.status(400).json({ error: 'Файл не є підтримуваним зображенням.' })
+          }
+          optimized = await sharp(file.buffer, { limitInputPixels: 40000000, failOn: 'error' })
+            .rotate()
+            .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 82, effort: 4 })
+            .toBuffer({ resolveWithObject: true })
+        } catch {
+          return res.status(400).json({ error: 'Не вдалося прочитати це зображення. Спробуй інший файл.' })
         }
-        const optimized = await sharp(file.buffer, { limitInputPixels: 40000000, failOn: 'error' })
-          .rotate()
-          .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 82, effort: 4 })
-          .toBuffer({ resolveWithObject: true })
         if (optimized.data.length > 2 * 1024 * 1024) {
           return res.status(400).json({ error: 'Після обробки фото все ще завелике. Спробуй інше зображення.' })
         }
@@ -119,7 +126,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
       await client.query('ROLLBACK').catch(() => undefined)
       next(error)
     } finally {
-      client.release()
+      client?.release()
     }
   })
 
