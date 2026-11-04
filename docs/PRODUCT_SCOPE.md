@@ -14,11 +14,23 @@ Audience: one school community only.
 - Users may have multiple permission roles. Decorative badges never grant permissions.
 - Authorization is enforced on the server, not only by hiding interface controls.
 
+## Content and media policy
+
+- Initial release supports photo uploads only.
+- Maximum photo size: 2 MB per image.
+- Accepted formats: JPEG/JPG, PNG, and WebP.
+- Video uploads and arbitrary file attachments are not supported.
+- Images must be validated server-side by actual file content, not only by the filename or browser-provided MIME type.
+- Reject SVG, animated formats, archives, documents, executables, and all other unsupported formats.
+- Apply safe image processing and remove EXIF metadata, including embedded GPS location, before publishing.
+- Uploaded images are private school content and must only be accessible to authenticated members with permission to view the relevant post.
+- The interface should explain the 2 MB limit before upload and show a clear validation error when a file is too large or unsupported.
+
 ## Planned modules
 
 1. Accounts, authentication, school access code, password recovery through class teacher/admin.
 2. Profiles and customization.
-3. School-wide feed, posts, media, comments, reactions, reports, moderation.
+3. School-wide feed, photo-only posts, comments, reactions, reports, moderation.
 4. Class pages and class feeds.
 5. Roles, permissions, badges, and admin panel.
 6. Large-scale voting, including secret ballots for sensitive elections.
@@ -37,5 +49,5 @@ An access code alone does not prove that one account equals one real student. Fu
 - No public student directory or search-engine indexing of member content.
 - Provide reporting, blocking, and active moderation.
 - Do not collect unnecessary personal data.
-- Establish clear rules for photos/videos showing students.
+- Establish clear rules for photos showing students and provide a way to report inappropriate images.
 - Keep secrets and student data out of the public source repository.
