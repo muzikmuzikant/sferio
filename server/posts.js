@@ -26,11 +26,11 @@ function validate(schema) {
   }
 }
 
-export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter }) {
+export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter, photoUploadLimiter }) {
   const router = express.Router()
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024, files: 5 },
+    limits: { fileSize: 2 * 1024 * 1024, files: 5, fields: 2, fieldSize: 20 * 1024, parts: 7 },
     fileFilter: (_req, file, callback) => {
       const allowed = ['image/jpeg', 'image/png', 'image/webp']
       callback(allowed.includes(file.mimetype) ? null : new Error('Дозволені лише JPG, PNG та WebP.'), allowed.includes(file.mimetype))
@@ -59,7 +59,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
     return result.rows[0] || null
   }
 
-  router.post('/posts/with-photos', requireAuth, contentLimiter, photoUpload, async (req, res, next) => {
+  router.post('/posts/with-photos', requireAuth, photoUploadLimiter, photoUpload, async (req, res, next) => {
     let client
     try {
       client = await pool.connect()
