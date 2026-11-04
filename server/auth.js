@@ -1,4 +1,4 @@
-import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import { hash, verify } from '@node-rs/argon2'
 import { pool } from './db.js'
 
@@ -17,13 +17,14 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function matchesSchoolCode(candidate) {
-  const expected = process.env.SCHOOL_ACCESS_CODE_SHA256
-  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) return false
-  const actualBuffer = Buffer.from(sha256(candidate), 'hex')
-  const expectedBuffer = Buffer.from(expected, 'hex')
-  return actualBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(actualBuffer, expectedBuffer)
+async function matchesSchoolCode(candidate) {
+  const expected = process.env.SCHOOL_ACCESS_CODE_HASH
+  if (!expected || !expected.startsWith('$argon2')) return false
+  try {
+    return await verify(expected, candidate)
+  } catch {
+    return false
+  }
 }
 
 function publicUser(user) {
@@ -64,7 +65,7 @@ export async function getSessionUser(req) {
 }
 
 export async function registerAccount({ username, displayName, password, schoolCode }, res) {
-  if (!matchesSchoolCode(schoolCode)) {
+  if (!(await matchesSchoolCode(schoolCode))) {
     const error = new Error('Невірний код доступу до ліцею.')
     error.status = 400
     throw error
