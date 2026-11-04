@@ -80,25 +80,41 @@ export async function registerAccount({ username, displayName, password, schoolC
     parallelism: 1
   })
 
-  let result
+  const client = await pool.connect()
+  let user
   try {
-    result = await pool.query(
+    await client.query('BEGIN')
+    const result = await client.query(
       `INSERT INTO users (username, username_normalized, display_name, password_hash)
        VALUES ($1, $2, $3, $4)
        RETURNING id, username, display_name, role, created_at`,
       [username.trim(), normalized, displayName.trim(), passwordHash]
     )
+    user = result.rows[0]
+    await client.query('INSERT INTO user_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [user.id])
+    await client.query(
+      "INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE slug = 'student' ON CONFLICT DO NOTHING",
+      [user.id]
+    )
+    await client.query(
+      "INSERT INTO audit_log (actor_id, action, target_type, target_id) VALUES ($1, 'account.registered', 'user', $1)",
+      [user.id]
+    )
+    await client.query('COMMIT')
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined)
     if (error.code === '23505') {
       const conflict = new Error('Цей логін уже зайнятий.')
       conflict.status = 409
       throw conflict
     }
     throw error
+  } finally {
+    client.release()
   }
 
-  await createSession(result.rows[0].id, res)
-  return publicUser(result.rows[0])
+  await createSession(user.id, res)
+  return publicUser(user)
 }
 
 export async function loginAccount({ username, password }, res) {
