@@ -255,3 +255,15 @@ h1 i,h2 i{font-style:normal;color:#a89cf4}
 .report-form button[type=submit]{background:#51466f;border-color:#65588b;color:#e9e4ff}
 .report-notice{font-size:9px;color:#b8e6ce;padding:8px 0}
 .post-menu:hover{color:#d0c7ff}
+
+
+/* One-time owner setup */
+.admin-bootstrap-card{max-width:1050px;margin:24px auto 0;padding:19px;border:1px solid #65588b;background:linear-gradient(120deg,#242137,#191c24);border-radius:7px}
+.admin-bootstrap-card h2{font:600 17px Manrope;color:#e9e6ff;margin:9px 0}
+.admin-bootstrap-card p{font-size:10px;color:#a7a4b7;line-height:1.7;margin:0 0 13px}
+.admin-bootstrap-card form{display:flex;gap:9px;flex-wrap:wrap}
+.admin-bootstrap-card input{flex:1;min-width:220px;background:#141720;border:1px solid #45405d;border-radius:4px;color:#eee;padding:11px;font:400 10px 'DM Sans',sans-serif;outline:none}
+.admin-bootstrap-card input:focus{border-color:#9b8ded}
+.admin-bootstrap-card button{display:flex;align-items:center;gap:8px;background:#8173dc;color:#fff;border:0;border-radius:4px;padding:10px 14px;font-size:10px;font-weight:700;cursor:pointer}
+.admin-bootstrap-card button:disabled{opacity:.5;cursor:not-allowed}
+.admin-bootstrap-card .auth-message{flex-basis:100%}
