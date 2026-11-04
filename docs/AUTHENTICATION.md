@@ -21,7 +21,7 @@ No real name, phone number, email, address or date of birth is required.
 - Session cookie is HttpOnly, SameSite=Lax and Secure in production.
 - Login and registration are rate-limited.
 - User input is validated on the server.
-- School access code is represented by a SHA-256 digest in a deployment variable.
+- School access code is verified against an Argon2id hash stored in a deployment variable.
 - Do not commit the actual access code, database URL or any credentials.
 
 ## Deployment requirements
