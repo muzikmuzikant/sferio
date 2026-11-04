@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react'
 import {
   ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CircleHelp,
   ClipboardList, Heart, Home, LogOut, MessageCircle, MoreHorizontal, Plus,
-  Search, ShieldCheck, Users, Eye, EyeOff
+  Search, ShieldCheck, Users, Eye, EyeOff, ImagePlus, X
 } from 'lucide-react'
 
 type User = {
@@ -116,6 +116,7 @@ function AuthPanel({ onAuthenticated }: { onAuthenticated: (user: User) => void 
   )
 }
 
+type FeedPhoto = { id: string; mime_type: string; width: number; height: number }
 type FeedPost = {
   id: string
   body: string
@@ -125,6 +126,7 @@ type FeedPost = {
   comment_count: number
   reaction_count: number
   my_reaction: string | null
+  photos: FeedPhoto[]
 }
 type FeedComment = {
   id: string
@@ -137,6 +139,8 @@ type FeedComment = {
 function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [draft, setDraft] = useState('')
+  const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
+  const [photoError, setPhotoError] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -161,21 +165,59 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
 
   useEffect(() => { void loadPosts() }, [])
 
+  function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(event.target.files || [])
+    setPhotoError('')
+    if (chosen.length > 5) {
+      setPhotoError('В одному дописі можна додати не більше 5 фото.')
+      event.target.value = ''
+      return
+    }
+    const invalid = chosen.find(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
+    if (invalid) {
+      setPhotoError('Дозволені лише JPG, PNG та WebP.')
+      event.target.value = ''
+      return
+    }
+    const tooLarge = chosen.find(file => file.size > 2 * 1024 * 1024)
+    if (tooLarge) {
+      setPhotoError('Кожне фото має бути розміром до 2 МБ.')
+      event.target.value = ''
+      return
+    }
+    setSelectedPhotos(chosen)
+    event.target.value = ''
+  }
+
   async function createPost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!draft.trim() || sending) return
+    if ((!draft.trim() && selectedPhotos.length === 0) || sending) return
     setSending(true)
     setError('')
+    setPhotoError('')
     try {
-      const response = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ body: draft.trim() })
-      })
+      let response: Response
+      if (selectedPhotos.length) {
+        const formData = new FormData()
+        formData.append('body', draft.trim())
+        selectedPhotos.forEach(file => formData.append('photos', file))
+        response = await fetch('/api/posts/with-photos', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        })
+      } else {
+        response = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ body: draft.trim() })
+        })
+      }
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'Не вдалося опублікувати допис.')
       setDraft('')
+      setSelectedPhotos([])
       await loadPosts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не вдалося опублікувати допис.')
@@ -264,7 +306,9 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
               <span className="member-avatar">{user.displayName.slice(0, 1).toUpperCase()}</span>
               <textarea value={draft} onChange={e => setDraft(e.target.value)} maxLength={5000} rows={3} placeholder="Чим хочеш поділитися зі школою?" aria-label="Текст допису" />
             </div>
-            <div className="real-composer-bottom"><span>{draft.length}/5000</span><button type="submit" disabled={!draft.trim() || sending}>{sending ? 'Публікуємо…' : 'Опублікувати'} <ArrowUpRight size={15} /></button></div>
+            {selectedPhotos.length > 0 && <div className="selected-photos">{selectedPhotos.map((photo, index) => <div className="selected-photo" key={photo.name + index}><ImagePlus size={13} /><span>{photo.name}</span><small>{(photo.size / 1024 / 1024).toFixed(2)} МБ</small><button type="button" onClick={() => setSelectedPhotos(current => current.filter((_, i) => i !== index))} aria-label="Прибрати фото"><X size={13} /></button></div>)}</div>}
+            {photoError && <div className="photo-error" role="alert">{photoError}</div>}
+            <div className="real-composer-bottom"><div className="composer-tools"><label className="photo-picker"><ImagePlus size={15} /> Додати фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={choosePhotos} /></label><span>{draft.length}/5000 · {selectedPhotos.length}/5 фото</span></div><button type="submit" disabled={(!draft.trim() && selectedPhotos.length === 0) || sending}>{sending ? 'Публікуємо…' : 'Опублікувати'} <ArrowUpRight size={15} /></button></div>
           </form>
           {error && <div className="feed-error" role="alert">{error}</div>}
           <div className="real-feed-heading"><div><span className="auth-overline">СПІЛЬНИЙ ПРОСТІР</span><h2>Стрічка ліцею</h2></div><button onClick={() => void loadPosts()} className="feed-refresh">Оновити</button></div>
@@ -273,7 +317,8 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
           ) : posts.map(post => (
             <article className="real-post" key={post.id}>
               <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Додаткові дії"><MoreHorizontal size={18} /></button></div>
-              <p className="real-post-body">{post.body}</p>
+              {post.body && <p className="real-post-body">{post.body}</p>}
+              {post.photos?.length > 0 && <div className="real-post-photos">{post.photos.map(photo => <img key={photo.id} src={'/api/photos/' + photo.id} alt="Фото до допису" loading="lazy" />)}</div>}
               <div className="real-post-actions">
                 <button className={post.my_reaction ? 'reacted' : ''} onClick={() => void toggleReaction(post)}><Heart size={16} /> {post.reaction_count || 0}</button>
                 <button onClick={() => void toggleComments(post.id)}><MessageCircle size={16} /> {post.comment_count || 0} коментарів</button>
