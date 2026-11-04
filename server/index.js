@@ -9,6 +9,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { initializeDatabase, pool, closeDatabase } from './db.js'
 import { createSession, getSessionUser, loginAccount, registerAccount, revokeSession } from './auth.js'
 import { createPostsRouter } from './posts.js'
+import { createClassesRouter } from './classes.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8080)
@@ -179,6 +180,7 @@ app.post('/api/auth/logout', async (req, res, next) => {
 })
 
 app.use('/api', createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter }))
+app.use('/api', createClassesRouter({ pool, requireAuth }))
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found' }))
 app.use(express.static(distDir, { index: false, maxAge: '1h' }))
 app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')))
