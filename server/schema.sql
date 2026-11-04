@@ -19,3 +19,104 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+
+-- Private profile data: only fields intended to be visible inside SFERIO.
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  bio VARCHAR(240) NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Classes are created by administrators; students cannot create them directly.
+CREATE TABLE IF NOT EXISTS school_classes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(12) NOT NULL UNIQUE,
+  grade SMALLINT NOT NULL CHECK (grade BETWEEN 1 AND 11),
+  section VARCHAR(3) NOT NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS class_memberships (
+  class_id UUID NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  class_role VARCHAR(20) NOT NULL DEFAULT 'student'
+    CHECK (class_role IN ('student', 'class_teacher', 'starosta', 'deputy')),
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (class_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS class_memberships_user_idx ON class_memberships(user_id);
+
+-- A null class_id means a school-wide post; otherwise it belongs to one class.
+CREATE TABLE IF NOT EXISTS posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  class_id UUID REFERENCES school_classes(id) ON DELETE CASCADE,
+  body TEXT NOT NULL DEFAULT '' CHECK (char_length(body) <= 5000),
+  status VARCHAR(16) NOT NULL DEFAULT 'published'
+    CHECK (status IN ('published', 'hidden', 'deleted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS posts_school_feed_idx
+  ON posts(created_at DESC) WHERE class_id IS NULL AND status = 'published';
+CREATE INDEX IF NOT EXISTS posts_class_feed_idx
+  ON posts(class_id, created_at DESC) WHERE class_id IS NOT NULL AND status = 'published';
+CREATE INDEX IF NOT EXISTS posts_author_idx ON posts(author_id, created_at DESC);
+
+-- Photo-only media policy: 2 MiB per image, no videos or arbitrary files.
+CREATE TABLE IF NOT EXISTS post_photos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  storage_key TEXT NOT NULL UNIQUE,
+  mime_type VARCHAR(32) NOT NULL
+    CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+  size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 2097152),
+  width INTEGER NOT NULL CHECK (width BETWEEN 1 AND 8000),
+  height INTEGER NOT NULL CHECK (height BETWEEN 1 AND 8000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS post_photos_post_idx ON post_photos(post_id);
+
+CREATE TABLE IF NOT EXISTS post_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  body VARCHAR(1500) NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1500),
+  status VARCHAR(16) NOT NULL DEFAULT 'published'
+    CHECK (status IN ('published', 'hidden', 'deleted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS post_comments_feed_idx
+  ON post_comments(post_id, created_at ASC) WHERE status = 'published';
+
+CREATE TABLE IF NOT EXISTS post_reactions (
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reaction VARCHAR(16) NOT NULL
+    CHECK (reaction IN ('like', 'heart', 'support', 'laugh', 'idea')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS content_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+  comment_id UUID REFERENCES post_comments(id) ON DELETE CASCADE,
+  reason VARCHAR(32) NOT NULL
+    CHECK (reason IN ('spam', 'harassment', 'inappropriate', 'privacy', 'other')),
+  details VARCHAR(500) NOT NULL DEFAULT '',
+  status VARCHAR(16) NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'reviewing', 'resolved', 'dismissed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (num_nonnulls(post_id, comment_id) = 1)
+);
+
+CREATE INDEX IF NOT EXISTS content_reports_queue_idx
+  ON content_reports(status, created_at ASC);
