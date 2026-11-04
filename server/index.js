@@ -51,7 +51,7 @@ const loginLimiter = rateLimit({
 })
 const registrationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 40,
+  limit: 100,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Забагато спроб реєстрації. Спробуй пізніше.' }
@@ -65,10 +65,24 @@ const contentLimiter = rateLimit({
 })
 const reportLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 10,
+  limit: 30,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Забагато скарг. Спробуй пізніше.' }
+})
+const photoUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Забагато завантажень фото. Спробуй трохи пізніше.' }
+})
+const adminBootstrapLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Забагато спроб початкового налаштування.' }
 })
 
 const registrationSchema = z.object({
@@ -128,7 +142,7 @@ async function requireAuth(req, res, next) {
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }))
 
-app.post('/api/admin/bootstrap', requireAuth, validate(bootstrapSchema), async (req, res, next) => {
+app.post('/api/admin/bootstrap', requireAuth, adminBootstrapLimiter, validate(bootstrapSchema), async (req, res, next) => {
   const expectedToken = process.env.SFERIO_ADMIN_BOOTSTRAP_TOKEN
   if (!expectedToken) return res.status(503).json({ error: 'Початкове налаштування адміністратора ще не ввімкнено.' })
   const provided = Buffer.from(req.validatedBody.token)
@@ -179,7 +193,7 @@ app.post('/api/auth/logout', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.use('/api', createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter }))
+app.use('/api', createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter, photoUploadLimiter }))
 app.use('/api', createClassesRouter({ pool, requireAuth }))
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found' }))
 app.use(express.static(distDir, { index: false, maxAge: '1h' }))
