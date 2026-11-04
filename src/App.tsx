@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react'
 import {
   ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CircleHelp,
   ClipboardList, Heart, Home, LogOut, MessageCircle, MoreHorizontal, Plus,
-  Search, ShieldCheck, Users, Eye, EyeOff, ImagePlus, X
+  Search, ShieldCheck, Users, Eye, EyeOff, ImagePlus, X, Flag
 } from 'lucide-react'
 
 type User = {
@@ -148,6 +148,10 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [comments, setComments] = useState<Record<string, FeedComment[]>>({})
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [sendingComment, setSendingComment] = useState<string | null>(null)
+  const [reportingPost, setReportingPost] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState('inappropriate')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportNotice, setReportNotice] = useState('')
 
   async function loadPosts() {
     setError('')
@@ -283,6 +287,25 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
     }
   }
 
+  async function submitReport(event: FormEvent<HTMLFormElement>, postId: string) {
+    event.preventDefault()
+    try {
+      const response = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ postId, reason: reportReason, details: reportDetails })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не вдалося надіслати скаргу.')
+      setReportNotice('Скаргу надіслано модераторам.')
+      setReportDetails('')
+      setReportingPost(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не вдалося надіслати скаргу.')
+    }
+  }
+
   function formatDate(value: string) {
     return new Intl.DateTimeFormat('uk-UA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   }
@@ -316,13 +339,26 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
             <div className="feed-placeholder"><div className="member-empty-icon"><MessageCircle size={22} /></div><h3>Поки що тут тихо</h3><p>Створи перший допис для спільноти ліцею.</p></div>
           ) : posts.map(post => (
             <article className="real-post" key={post.id}>
-              <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Додаткові дії"><MoreHorizontal size={18} /></button></div>
+              <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Поскаржитися на допис" onClick={() => { setReportingPost(current => current === post.id ? null : post.id); setReportNotice('') }}><Flag size={16} /></button></div>
               {post.body && <p className="real-post-body">{post.body}</p>}
               {post.photos?.length > 0 && <div className="real-post-photos">{post.photos.map(photo => <img key={photo.id} src={'/api/photos/' + photo.id} alt="Фото до допису" loading="lazy" />)}</div>}
               <div className="real-post-actions">
                 <button className={post.my_reaction ? 'reacted' : ''} onClick={() => void toggleReaction(post)}><Heart size={16} /> {post.reaction_count || 0}</button>
                 <button onClick={() => void toggleComments(post.id)}><MessageCircle size={16} /> {post.comment_count || 0} коментарів</button>
               </div>
+              {reportingPost === post.id && <form className="report-form" onSubmit={event => void submitReport(event, post.id)}>
+                <b>Поскаржитися на допис</b>
+                <select value={reportReason} onChange={event => setReportReason(event.target.value)}>
+                  <option value="spam">Спам</option>
+                  <option value="harassment">Образи або цькування</option>
+                  <option value="inappropriate">Недоречний контент</option>
+                  <option value="privacy">Порушення приватності</option>
+                  <option value="other">Інше</option>
+                </select>
+                <textarea value={reportDetails} onChange={event => setReportDetails(event.target.value)} maxLength={500} rows={2} placeholder="Деталі (необов’язково)" />
+                <div><button type="button" onClick={() => setReportingPost(null)}>Скасувати</button><button type="submit">Надіслати скаргу</button></div>
+              </form>}
+              {reportNotice && <div className="report-notice" role="status">{reportNotice}</div>}
               {openComments[post.id] && <div className="comments-panel">
                 {(comments[post.id] || []).map(comment => <div className="feed-comment" key={comment.id}><b>{comment.author_name}</b><p>{comment.body}</p><small>{formatDate(comment.created_at)}</small></div>)}
                 <form className="comment-form" onSubmit={event => void createComment(event, post.id)}>
