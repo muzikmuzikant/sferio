@@ -466,6 +466,14 @@ function LandingPage({ onLogin }: { onLogin: () => void }) {
 }
 
 function App() {
+  useEffect(() => {
+    // GitHub Pages is a static preview and cannot host the SFERIO API.
+    // Send visitors to the Railway beta, where the frontend and API share one origin.
+    if (window.location.hostname === 'muzikmuzikant.github.io') {
+      window.location.replace('https://sferio-beta-beta.up.railway.app/')
+    }
+  }, [])
+
   const [user, setUser] = useState<User | null>(null)
   const [checking, setChecking] = useState(true)
   const [showAuth, setShowAuth] = useState(false)
