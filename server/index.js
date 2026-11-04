@@ -30,19 +30,25 @@ app.use(helmet({
     }
   }
 }))
-app.use(express.json({ limit: '32kb' }))
+app.use(express.json({ limit: '32kb', strict: true }))
 app.use(cookieParser())
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Pragma', 'no-cache')
+  next()
+})
 
+// IP-based limits are deliberately generous because students may share a school Wi-Fi network.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 60,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Забагато спроб. Спробуй трохи пізніше.' }
 })
 const registrationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 5,
+  limit: 40,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Забагато спроб реєстрації. Спробуй пізніше.' }
