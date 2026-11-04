@@ -77,8 +77,9 @@ export function createClassesRouter({ pool, requireAuth }) {
   })
 
   router.post('/classes/:classId/members', requireAuth, validate(addMemberSchema), async (req, res, next) => {
-    const client = await pool.connect()
+    let client
     try {
+      client = await pool.connect()
       const classId = z.string().uuid().safeParse(req.params.classId)
       if (!classId.success) return res.status(400).json({ error: 'Некоректний клас.' })
       if (!(await userHasPermission(pool, req.user.id, 'class.members.manage', classId.data))) {
@@ -102,16 +103,23 @@ export function createClassesRouter({ pool, requireAuth }) {
 
       await client.query('BEGIN')
       if (classRole !== 'student') {
-        const roleSlug = classRole
         await client.query(
           'UPDATE class_memberships SET class_role = \'student\' WHERE class_id = $1 AND class_role = $2',
-          [classId.data, roleSlug]
+          [classId.data, classRole]
         )
         await client.query(
           'DELETE FROM user_roles ur USING roles r WHERE ur.role_id = r.id AND ur.class_id = $1 AND r.slug = $2',
-          [classId.data, roleSlug]
+          [classId.data, classRole]
         )
       }
+      await client.query(
+        "UPDATE class_memberships SET class_role = 'student' WHERE class_id = $1 AND user_id = $2",
+        [classId.data, target.rows[0].id]
+      )
+      await client.query(
+        "DELETE FROM user_roles ur USING roles r WHERE ur.role_id = r.id AND ur.class_id = $1 AND ur.user_id = $2 AND r.slug IN ('class_teacher', 'starosta', 'deputy')",
+        [classId.data, target.rows[0].id]
+      )
       await client.query(
         'INSERT INTO class_memberships (class_id, user_id, class_role) VALUES ($1, $2, $3) ON CONFLICT (class_id, user_id) DO UPDATE SET class_role = EXCLUDED.class_role',
         [classId.data, target.rows[0].id, classRole]
