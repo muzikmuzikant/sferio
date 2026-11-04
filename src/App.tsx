@@ -136,7 +136,7 @@ type FeedComment = {
   author_username: string
 }
 
-function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
+function MemberHome({ user, onLogout, onUserUpdated }: { user: User; onLogout: () => void; onUserUpdated: (user: User) => void }) {
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [draft, setDraft] = useState('')
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
@@ -152,7 +152,36 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [reportReason, setReportReason] = useState('inappropriate')
   const [reportDetails, setReportDetails] = useState('')
   const [reportNotice, setReportNotice] = useState('')
+  const [showAdminSetup] = useState(() => new URLSearchParams(window.location.search).get('setup') === 'admin')
+  const [adminToken, setAdminToken] = useState('')
+  const [adminBusy, setAdminBusy] = useState(false)
+  const [adminError, setAdminError] = useState('')
   const [reportedPostId, setReportedPostId] = useState<string | null>(null)
+
+  async function claimAdminAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAdminBusy(true)
+    setAdminError('')
+    try {
+      const response = await fetch('/api/admin/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token: adminToken })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не вдалося активувати права адміністратора.')
+      const session = await fetch('/api/auth/me', { credentials: 'include' })
+      const current = await session.json().catch(() => ({}))
+      if (session.ok && current.user) onUserUpdated(current.user)
+      setAdminToken('')
+      window.history.replaceState({}, '', window.location.pathname)
+    } catch (err) {
+      setAdminError(err instanceof Error ? err.message : 'Не вдалося активувати права адміністратора.')
+    } finally {
+      setAdminBusy(false)
+    }
+  }
 
   async function loadPosts() {
     setError('')
@@ -319,6 +348,16 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
         <span className="member-school"><span className="school-dot" /> Слобідський ліцей №2</span>
         <div className="member-user"><span className="member-avatar">{user.displayName.slice(0, 1).toUpperCase()}</span><span>{user.displayName}</span><button onClick={onLogout} title="Вийти"><LogOut size={16} /></button></div>
       </header>
+      {showAdminSetup && user.role !== 'admin' && <section className="admin-bootstrap-card">
+        <span className="auth-overline">ПОЧАТКОВЕ НАЛАШТУВАННЯ</span>
+        <h2>Активація адміністратора</h2>
+        <p>Цей одноразовий крок призначений лише для власника SFERIO. Не передавай код іншим користувачам.</p>
+        <form onSubmit={claimAdminAccess}>
+          <input type="password" value={adminToken} onChange={event => setAdminToken(event.target.value)} minLength={32} maxLength={256} autoComplete="off" placeholder="Одноразовий код налаштування" required />
+          {adminError && <div className="auth-message error" role="alert">{adminError}</div>}
+          <button type="submit" disabled={adminBusy || adminToken.length < 32}>{adminBusy ? 'Перевіряємо…' : 'Активувати права'} <ArrowUpRight size={15} /></button>
+        </form>
+      </section>}
       <section className="member-welcome">
         <span className="auth-overline">ТВОЯ ШКІЛЬНА СПІЛЬНОТА</span>
         <h1>Привіт, {user.displayName}.</h1>
@@ -448,7 +487,7 @@ function App() {
   }
 
   if (checking) return <div className="app-loading"><span className="loading-mark">s.</span><span>Завантажуємо SFERIO</span></div>
-  if (user) return <MemberHome user={user} onLogout={logout} />
+  if (user) return <MemberHome user={user} onLogout={logout} onUserUpdated={setUser} />
   if (showAuth) return <><button className="auth-back" onClick={() => setShowAuth(false)}>← На головну</button><AuthPanel onAuthenticated={setUser} /></>
   return <LandingPage onLogin={() => setShowAuth(true)} />
 }
