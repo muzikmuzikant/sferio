@@ -28,20 +28,24 @@
 
 ## Current status
 - [x] Public GitHub repository and separate `beta` branch.
-- [x] Redesigned responsive SFERIO landing-page concept.
-- [x] Initial API foundation: health, register, login, session lookup and logout routes.
+- [x] Responsive SFERIO landing page.
+- [x] Login and registration interface connected to the API routes.
+- [x] API foundation: health, register, login, session lookup and logout routes.
 - [x] Account model: username, password hash, chosen display name, default student role.
-- [x] Argon2id password hashing, opaque server-side sessions, rate limits and server-side validation.
+- [x] Argon2id password hashing, opaque server-side sessions, rate limits, no-cache API responses and server-side validation.
 - [x] School access code is checked on the server using a deployment-only Argon2id hash.
 - [x] PostgreSQL provisioned in Railway project SFERIO, environment `beta`.
 - [x] Beta app service configured with a private database connection reference and PostgreSQL SSL mode.
-- [ ] Complete and verify the current beta API deployment.
+- [x] Railway start command configured to run the Node API server; health check uses `/api/health`.
+- [ ] Verify the latest beta source revision is deployed and the API health check passes.
 - [ ] Configure the school access-code hash in beta environment variables.
 - [ ] Verify registration/login end to end against PostgreSQL.
-- [ ] Build the actual authenticated application shell and connect the sign-in/register screens.
 - [ ] Implement photo-only uploads under the defined 2 MB policy.
+- [ ] Build profiles, feed, class pages, roles and remaining modules.
 
 ## Current limitations
-- The authenticated app and photo upload flow are not yet complete.
+- Registration remains unavailable until a real school access-code hash is configured privately in the beta environment.
+- The authenticated app shell is a first foundation screen; the social modules are not yet implemented.
+- Photo uploads are not yet implemented.
 - GitHub Pages is a static preview only and cannot host the API or database.
 - Never commit real access codes, database credentials or student data.
