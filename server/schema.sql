@@ -70,7 +70,8 @@ CREATE INDEX IF NOT EXISTS posts_author_idx ON posts(author_id, created_at DESC)
 CREATE TABLE IF NOT EXISTS post_photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  storage_key TEXT NOT NULL UNIQUE,
+  storage_key TEXT UNIQUE,
+  image_data BYTEA,
   mime_type VARCHAR(32) NOT NULL
     CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
   size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 2097152),
@@ -78,6 +79,9 @@ CREATE TABLE IF NOT EXISTS post_photos (
   height INTEGER NOT NULL CHECK (height BETWEEN 1 AND 8000),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE post_photos ALTER COLUMN storage_key DROP NOT NULL;
+ALTER TABLE post_photos ADD COLUMN IF NOT EXISTS image_data BYTEA;
 
 CREATE INDEX IF NOT EXISTS post_photos_post_idx ON post_photos(post_id);
 
