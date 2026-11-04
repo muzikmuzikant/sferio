@@ -182,3 +182,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_log_actor_idx ON audit_log(actor_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key VARCHAR(80) PRIMARY KEY,
+  setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO system_settings (setting_key, setting_value)
+VALUES ('admin_bootstrap_claimed', 'false'::jsonb)
+ON CONFLICT (setting_key) DO NOTHING;
