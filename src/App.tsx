@@ -116,7 +116,135 @@ function AuthPanel({ onAuthenticated }: { onAuthenticated: (user: User) => void 
   )
 }
 
+type FeedPost = {
+  id: string
+  body: string
+  created_at: string
+  author_name: string
+  author_username: string
+  comment_count: number
+  reaction_count: number
+  my_reaction: string | null
+}
+type FeedComment = {
+  id: string
+  body: string
+  created_at: string
+  author_name: string
+  author_username: string
+}
+
 function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const [posts, setPosts] = useState<FeedPost[]>([])
+  const [draft, setDraft] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
+  const [comments, setComments] = useState<Record<string, FeedComment[]>>({})
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
+  const [sendingComment, setSendingComment] = useState<string | null>(null)
+
+  async function loadPosts() {
+    setError('')
+    try {
+      const response = await fetch('/api/posts', { credentials: 'include' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не вдалося завантажити стрічку.')
+      setPosts(data.posts || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не вдалося завантажити стрічку.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void loadPosts() }, [])
+
+  async function createPost(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!draft.trim() || sending) return
+    setSending(true)
+    setError('')
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ body: draft.trim() })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не вдалося опублікувати допис.')
+      setDraft('')
+      await loadPosts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не вдалося опублікувати допис.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function toggleReaction(post: FeedPost) {
+    try {
+      const response = await fetch('/api/posts/' + post.id + '/reaction', {
+        method: post.my_reaction ? 'DELETE' : 'PUT',
+        headers: post.my_reaction ? undefined : { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: post.my_reaction ? undefined : JSON.stringify({ reaction: 'like' })
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Не вдалося змінити реакцію.')
+      }
+      await loadPosts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не вдалося змінити реакцію.')
+    }
+  }
+
+  async function toggleComments(postId: string) {
+    const willOpen = !openComments[postId]
+    setOpenComments(current => ({ ...current, [postId]: willOpen }))
+    if (willOpen && !comments[postId]) {
+      try {
+        const response = await fetch('/api/posts/' + postId + '/comments', { credentials: 'include' })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || 'Не вдалося завантажити коментарі.')
+        setComments(current => ({ ...current, [postId]: data.comments || [] }))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Не вдалося завантажити коментарі.')
+      }
+    }
+  }
+
+  async function createComment(event: FormEvent<HTMLFormElement>, postId: string) {
+    event.preventDefault()
+    const body = (commentDrafts[postId] || '').trim()
+    if (!body || sendingComment) return
+    setSendingComment(postId)
+    try {
+      const response = await fetch('/api/posts/' + postId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ body })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не вдалося додати коментар.')
+      setComments(current => ({ ...current, [postId]: [...(current[postId] || []), data.comment] }))
+      setCommentDrafts(current => ({ ...current, [postId]: '' }))
+      await loadPosts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не вдалося додати коментар.')
+    } finally {
+      setSendingComment(null)
+    }
+  }
+
+  function formatDate(value: string) {
+    return new Intl.DateTimeFormat('uk-UA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  }
+
   return (
     <main className="member-shell">
       <header className="member-header">
@@ -127,13 +255,43 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
       <section className="member-welcome">
         <span className="auth-overline">ТВОЯ ШКІЛЬНА СПІЛЬНОТА</span>
         <h1>Привіт, {user.displayName}.</h1>
-        <p>Твій акаунт SFERIO створено. Простір поступово наповнюватиметься можливостями.</p>
-        <div className="member-status"><Check size={16} /> Ти увійшов до SFERIO</div>
+        <p>Ділись новинами, підтримуй ідеї та будь у курсі життя ліцею.</p>
       </section>
-      <section className="member-empty">
-        <div className="member-empty-icon"><Users size={25} /></div>
-        <h2>Тут з’явиться життя ліцею</h2>
-        <p>Стрічка дописів, сторінки класів, голосування та шкільні події будуть додані наступними етапами.</p>
+      <section className="feed-workspace">
+        <div className="feed-main-column">
+          <form className="real-composer" onSubmit={createPost}>
+            <div className="real-composer-top">
+              <span className="member-avatar">{user.displayName.slice(0, 1).toUpperCase()}</span>
+              <textarea value={draft} onChange={e => setDraft(e.target.value)} maxLength={5000} rows={3} placeholder="Чим хочеш поділитися зі школою?" aria-label="Текст допису" />
+            </div>
+            <div className="real-composer-bottom"><span>{draft.length}/5000</span><button type="submit" disabled={!draft.trim() || sending}>{sending ? 'Публікуємо…' : 'Опублікувати'} <ArrowUpRight size={15} /></button></div>
+          </form>
+          {error && <div className="feed-error" role="alert">{error}</div>}
+          <div className="real-feed-heading"><div><span className="auth-overline">СПІЛЬНИЙ ПРОСТІР</span><h2>Стрічка ліцею</h2></div><button onClick={() => void loadPosts()} className="feed-refresh">Оновити</button></div>
+          {loading ? <div className="feed-placeholder">Завантажуємо дописи…</div> : posts.length === 0 ? (
+            <div className="feed-placeholder"><div className="member-empty-icon"><MessageCircle size={22} /></div><h3>Поки що тут тихо</h3><p>Створи перший допис для спільноти ліцею.</p></div>
+          ) : posts.map(post => (
+            <article className="real-post" key={post.id}>
+              <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Додаткові дії"><MoreHorizontal size={18} /></button></div>
+              <p className="real-post-body">{post.body}</p>
+              <div className="real-post-actions">
+                <button className={post.my_reaction ? 'reacted' : ''} onClick={() => void toggleReaction(post)}><Heart size={16} /> {post.reaction_count || 0}</button>
+                <button onClick={() => void toggleComments(post.id)}><MessageCircle size={16} /> {post.comment_count || 0} коментарів</button>
+              </div>
+              {openComments[post.id] && <div className="comments-panel">
+                {(comments[post.id] || []).map(comment => <div className="feed-comment" key={comment.id}><b>{comment.author_name}</b><p>{comment.body}</p><small>{formatDate(comment.created_at)}</small></div>)}
+                <form className="comment-form" onSubmit={event => void createComment(event, post.id)}>
+                  <input value={commentDrafts[post.id] || ''} onChange={e => setCommentDrafts(current => ({ ...current, [post.id]: e.target.value }))} maxLength={1500} placeholder="Написати коментар…" aria-label="Текст коментаря" />
+                  <button type="submit" disabled={!(commentDrafts[post.id] || '').trim() || sendingComment === post.id} aria-label="Надіслати коментар"><ArrowUpRight size={17} /></button>
+                </form>
+              </div>}
+            </article>
+          ))}
+        </div>
+        <aside className="feed-side-column">
+          <div className="feed-side-card"><span className="auth-overline">SFERIO</span><h3>Спільнота нашого ліцею</h3><p>Тут збиратимуться шкільні новини, думки та ініціативи.</p><div className="side-private"><ShieldCheck size={15} /> Закритий простір</div></div>
+          <div className="feed-side-card"><span className="auth-overline">НАСТУПНІ ЕТАПИ</span><ul><li>Сторінки класів</li><li>Фото в дописах</li><li>Голосування та події</li></ul></div>
+        </aside>
       </section>
       <footer className="member-footer"><span>SFERIO · Слобідський ліцей №2</span><span>Акаунт: @{user.username}</span></footer>
     </main>
