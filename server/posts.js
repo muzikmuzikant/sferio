@@ -123,7 +123,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
       await client.query('COMMIT')
       res.status(201).json({ post, photos: savedPhotos })
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined)
+      if (client) await client.query('ROLLBACK').catch(() => undefined)
       next(error)
     } finally {
       client?.release()
