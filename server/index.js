@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { timingSafeEqual } from 'node:crypto'
 import { initializeDatabase, pool, closeDatabase } from './db.js'
 import { createSession, getSessionUser, loginAccount, registerAccount, revokeSession } from './auth.js'
 import { createPostsRouter } from './posts.js'
@@ -75,6 +76,7 @@ const registrationSchema = z.object({
   password: z.string().min(10).max(128),
   schoolCode: z.string().trim().min(1).max(128)
 })
+const bootstrapSchema = z.object({ token: z.string().min(32).max(256) })
 const loginSchema = z.object({
   username: z.string().trim().min(1).max(24),
   password: z.string().min(1).max(128)
@@ -124,6 +126,50 @@ async function requireAuth(req, res, next) {
 }
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }))
+
+app.post('/api/admin/bootstrap', requireAuth, validate(bootstrapSchema), async (req, res, next) => {
+  const expectedToken = process.env.SFERIO_ADMIN_BOOTSTRAP_TOKEN
+  if (!expectedToken) return res.status(503).json({ error: 'Початкове налаштування адміністратора ще не ввімкнено.' })
+  const provided = Buffer.from(req.validatedBody.token)
+  const expected = Buffer.from(expectedToken)
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    return res.status(403).json({ error: 'Невірний код початкового налаштування.' })
+  }
+
+  let client
+  try {
+    client = await pool.connect()
+    await client.query('BEGIN')
+    const setting = await client.query(
+      "SELECT setting_value FROM system_settings WHERE setting_key = 'admin_bootstrap_claimed' FOR UPDATE"
+    )
+    if (setting.rows[0]?.setting_value === true) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: 'Початковий доступ адміністратора вже використано.' })
+    }
+    const adminRole = await client.query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")
+    if (!adminRole.rowCount) throw new Error('Admin role missing from schema')
+    await client.query(
+      'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.id, adminRole.rows[0].id]
+    )
+    await client.query("UPDATE users SET role = 'admin', updated_at = NOW() WHERE id = $1", [req.user.id])
+    await client.query(
+      "UPDATE system_settings SET setting_value = 'true'::jsonb, updated_at = NOW() WHERE setting_key = 'admin_bootstrap_claimed'"
+    )
+    await client.query(
+      "INSERT INTO audit_log (actor_id, action, target_type, target_id) VALUES ($1, 'admin.bootstrap.claimed', 'user', $1)",
+      [req.user.id]
+    )
+    await client.query('COMMIT')
+    res.json({ ok: true, message: 'Початкові права адміністратора активовано.' })
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => undefined)
+    next(error)
+  } finally {
+    client?.release()
+  }
+})
 
 app.post('/api/auth/logout', async (req, res, next) => {
   try {
