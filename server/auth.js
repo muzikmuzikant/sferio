@@ -42,6 +42,8 @@ export async function createSession(userId, res) {
   const tokenHash = sha256(token)
   const expiresAt = new Date(Date.now() + cookieOptions.maxAge)
 
+  // Remove expired sessions opportunistically so the session table stays small.
+  await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()')
   await pool.query(
     'INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, tokenHash, expiresAt]
