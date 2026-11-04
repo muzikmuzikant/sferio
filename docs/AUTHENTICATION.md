@@ -23,6 +23,7 @@ No real name, phone number, email, address or date of birth is required.
 - `POST /api/auth/login` — sign in
 - `GET /api/auth/me` — current session
 - `POST /api/auth/logout` — revoke current session
+- `POST /api/admin/bootstrap` — one-time administrator claim for the currently signed-in account; requires the private bootstrap token and can only succeed once
 
 ## Security
 - Passwords are hashed with Argon2id.
@@ -35,4 +36,4 @@ No real name, phone number, email, address or date of birth is required.
 - Do not commit the actual access code, database URL or any credentials.
 
 ## Deployment requirements
-Set `DATABASE_URL` and `SCHOOL_ACCESS_CODE_HASH` in the beta service's private environment variables. The app and API should be served from the same origin so browser sessions are not dependent on third-party cookies.
+Set `DATABASE_URL`, `SCHOOL_ACCESS_CODE_HASH`, and `SFERIO_ADMIN_BOOTSTRAP_TOKEN` in the beta service's private environment variables. The bootstrap token must never be committed to GitHub. After the first administrator claims access, the database marks the bootstrap as used. The app and API should be served from the same origin so browser sessions are not dependent on third-party cookies.
