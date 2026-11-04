@@ -124,3 +124,61 @@ CREATE TABLE IF NOT EXISTS content_reports (
 
 CREATE INDEX IF NOT EXISTS content_reports_queue_idx
   ON content_reports(status, created_at ASC);
+
+-- Permission roles support multiple global and class-scoped roles per account.
+CREATE TABLE IF NOT EXISTS roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug VARCHAR(32) NOT NULL UNIQUE,
+  title VARCHAR(50) NOT NULL,
+  icon VARCHAR(32) NOT NULL DEFAULT 'shield',
+  color VARCHAR(16) NOT NULL DEFAULT '#8B7CE6',
+  description VARCHAR(200) NOT NULL DEFAULT '',
+  is_system BOOLEAN NOT NULL DEFAULT FALSE,
+  permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO roles (slug, title, icon, color, description, is_system, permissions) VALUES
+  ('admin', 'Адміністратор', 'shield-check', '#A78BFA', 'Повний доступ до керування SFERIO', TRUE, '["*"]'::jsonb),
+  ('president', 'Президент учнівського самоврядування', 'award', '#E6B85C', 'Координація учнівського самоврядування', TRUE, '["voting.manage","initiatives.manage","events.manage"]'::jsonb),
+  ('teacher', 'Вчитель', 'graduation-cap', '#65A6D9', 'Працівник ліцею', TRUE, '["announcements.create"]'::jsonb),
+  ('class_teacher', 'Класний керівник', 'users', '#65B89B', 'Керування власним класом', TRUE, '["class.members.manage","class.leadership.manage","class.posts.moderate"]'::jsonb),
+  ('starosta', 'Староста', 'crown', '#D6A65D', 'Представник класу', TRUE, '["class.events.create"]'::jsonb),
+  ('deputy', 'Заступник старости', 'badge-check', '#B39AE6', 'Заступник представника класу', TRUE, '["class.events.create"]'::jsonb),
+  ('moderator', 'Модератор', 'eye', '#D58E9B', 'Модерація шкільного контенту', TRUE, '["content.moderate","content.reports.manage"]'::jsonb),
+  ('student', 'Учень', 'user-round', '#8B7CE6', 'Стандартний обліковий запис', TRUE, '["posts.create","comments.create","reactions.create","reports.create"]'::jsonb)
+ON CONFLICT (slug) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  class_id UUID REFERENCES school_classes(id) ON DELETE CASCADE,
+  assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_roles_global_unique
+  ON user_roles(user_id, role_id) WHERE class_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS user_roles_class_unique
+  ON user_roles(user_id, role_id, class_id) WHERE class_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS user_roles_user_idx ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS user_roles_class_idx ON user_roles(class_id) WHERE class_id IS NOT NULL;
+
+-- Backfill role assignments for accounts created before the role system migration.
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id FROM users u JOIN roles r ON r.slug = COALESCE(u.role, 'student')
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(80) NOT NULL,
+  target_type VARCHAR(40) NOT NULL,
+  target_id UUID,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_actor_idx ON audit_log(actor_id, created_at DESC);
