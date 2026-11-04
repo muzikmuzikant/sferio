@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { initializeDatabase, pool, closeDatabase } from './db.js'
 import { createSession, getSessionUser, loginAccount, registerAccount, revokeSession } from './auth.js'
+import { createPostsRouter } from './posts.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8080)
@@ -52,6 +53,20 @@ const registrationLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Забагато спроб реєстрації. Спробуй пізніше.' }
+})
+const contentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Забагато дій за короткий час. Спробуй пізніше.' }
+})
+const reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Забагато скарг. Спробуй пізніше.' }
 })
 
 const registrationSchema = z.object({
@@ -99,13 +114,16 @@ app.post('/api/auth/login', loginLimiter, validate(loginSchema), async (req, res
   } catch (error) { next(error) }
 })
 
-app.get('/api/auth/me', async (req, res, next) => {
+async function requireAuth(req, res, next) {
   try {
     const user = await getSessionUser(req)
     if (!user) return res.status(401).json({ error: 'Потрібно увійти до SFERIO.' })
-    res.json({ user })
+    req.user = user
+    next()
   } catch (error) { next(error) }
-})
+}
+
+app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }))
 
 app.post('/api/auth/logout', async (req, res, next) => {
   try {
@@ -114,6 +132,7 @@ app.post('/api/auth/logout', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.use('/api', createPostsRouter({ pool, requireAuth, contentLimiter, reportLimiter }))
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found' }))
 app.use(express.static(distDir, { index: false, maxAge: '1h' }))
 app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')))
