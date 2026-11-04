@@ -225,3 +225,20 @@ h1 i,h2 i{font-style:normal;color:#a89cf4}
 .feed-side-card li{font-size:10px;color:#a5a8b5;padding:8px 0;border-top:1px solid #2d303a}
 @media(max-width:760px){.feed-workspace{grid-template-columns:1fr;padding:28px 0 40px;gap:15px}.feed-side-column{display:grid;grid-template-columns:1fr 1fr}.member-welcome{padding-bottom:28px}}
 @media(max-width:480px){.feed-side-column{grid-template-columns:1fr}.real-composer{padding:12px}.real-post{padding:12px 12px 0}.real-post-body{font-size:11px}.real-feed-heading h2{font-size:19px}}
+
+
+/* Photo-only post attachments */
+.composer-tools{display:flex;align-items:center;gap:12px;min-width:0}
+.composer-tools>span{font-size:8px;color:#777c89}
+.photo-picker{display:inline-flex;align-items:center;gap:6px;color:#b9afff;font-size:9px;cursor:pointer}
+.photo-picker input{display:none}
+.selected-photos{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.selected-photo{display:flex;align-items:center;gap:8px;padding:7px 9px;background:#141720;border:1px solid #30333e;border-radius:4px;color:#b9afff;font-size:9px;min-width:0}
+.selected-photo span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9cad3;flex:1}
+.selected-photo small{color:#858a98;white-space:nowrap}
+.selected-photo button{border:0;background:transparent;color:#858a98;padding:2px;display:grid;place-items:center;cursor:pointer}
+.photo-error{margin:8px 0;color:#ffc8cd;font-size:9px}
+.real-post-photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0 15px}
+.real-post-photos img{display:block;width:100%;max-height:420px;aspect-ratio:4/3;object-fit:cover;border-radius:5px;background:#10121a;border:1px solid #343744}
+.real-post-photos img:only-child{grid-column:1/-1;max-height:560px;aspect-ratio:16/10;object-fit:contain}
+@media(max-width:520px){.composer-tools{gap:8px;flex-wrap:wrap}.composer-tools>span{font-size:7px}.real-post-photos{gap:5px}.real-post-photos img{max-height:300px}}
