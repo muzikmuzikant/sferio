@@ -1,14 +1,13 @@
 # Development plan
 
 ## Workflow
-
 - `main`: stable branch. No changes without explicit user approval.
 - `beta`: active implementation and testing.
-- Work is delivered in small milestones with a checklist and verification notes.
+- Deliver work in small milestones with a checklist and verification notes.
+- GitHub Pages publishes only the static beta preview. The authenticated application will run on the beta app host with its API and database.
 - No production deployment without explicit approval.
 
 ## Milestones
-
 1. Project foundation, responsive shell, authentication and account model.
 2. School access-code registration and secure session handling.
 3. Profiles and profile customization.
@@ -21,8 +20,17 @@
 10. Notifications, moderation, audit log, backups and hardening.
 
 ## Current status
+- [x] Public GitHub repository and separate `beta` branch.
+- [x] Redesigned responsive SFERIO landing-page concept.
+- [x] Initial API foundation: health, register, login, session lookup and logout routes.
+- [x] Account model: username, password hash, chosen display name, default student role.
+- [x] Password hashing, opaque server-side sessions, rate limits and server-side validation.
+- [x] School access code is checked on the server using a deployment-only SHA-256 digest.
+- [ ] Provision PostgreSQL and configure beta-only environment variables.
+- [ ] Deploy API and verify registration/login end to end.
+- [ ] Build the actual authenticated application shell and connect the sign-in/register screens.
 
-- Repository created and public visibility confirmed.
-- Railway project created with a beta environment.
-- Initial frontend scaffold and landing-page concept are in progress.
-- Authentication and backend are not implemented yet.
+## Current limitations
+- The API code is in beta but is not live until PostgreSQL and private environment variables are configured.
+- GitHub Pages is a static preview only and cannot host the API or database.
+- Never commit real access codes, database credentials or student data.
