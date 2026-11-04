@@ -152,6 +152,7 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [reportReason, setReportReason] = useState('inappropriate')
   const [reportDetails, setReportDetails] = useState('')
   const [reportNotice, setReportNotice] = useState('')
+  const [reportedPostId, setReportedPostId] = useState<string | null>(null)
 
   async function loadPosts() {
     setError('')
@@ -299,6 +300,7 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'Не вдалося надіслати скаргу.')
       setReportNotice('Скаргу надіслано модераторам.')
+      setReportedPostId(postId)
       setReportDetails('')
       setReportingPost(null)
     } catch (err) {
@@ -339,7 +341,7 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
             <div className="feed-placeholder"><div className="member-empty-icon"><MessageCircle size={22} /></div><h3>Поки що тут тихо</h3><p>Створи перший допис для спільноти ліцею.</p></div>
           ) : posts.map(post => (
             <article className="real-post" key={post.id}>
-              <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Поскаржитися на допис" onClick={() => { setReportingPost(current => current === post.id ? null : post.id); setReportNotice('') }}><Flag size={16} /></button></div>
+              <div className="real-post-head"><span className="member-avatar post-avatar">{post.author_name.slice(0, 1).toUpperCase()}</span><div><b>{post.author_name}</b><small>@{post.author_username} · {formatDate(post.created_at)}</small></div><button className="post-menu" title="Поскаржитися на допис" onClick={() => { setReportingPost(current => current === post.id ? null : post.id); setReportNotice(''); setReportedPostId(null) }}><Flag size={16} /></button></div>
               {post.body && <p className="real-post-body">{post.body}</p>}
               {post.photos?.length > 0 && <div className="real-post-photos">{post.photos.map(photo => <img key={photo.id} src={'/api/photos/' + photo.id} alt="Фото до допису" loading="lazy" />)}</div>}
               <div className="real-post-actions">
@@ -358,7 +360,7 @@ function MemberHome({ user, onLogout }: { user: User; onLogout: () => void }) {
                 <textarea value={reportDetails} onChange={event => setReportDetails(event.target.value)} maxLength={500} rows={2} placeholder="Деталі (необов’язково)" />
                 <div><button type="button" onClick={() => setReportingPost(null)}>Скасувати</button><button type="submit">Надіслати скаргу</button></div>
               </form>}
-              {reportNotice && <div className="report-notice" role="status">{reportNotice}</div>}
+              {reportNotice && reportedPostId === post.id && <div className="report-notice" role="status">{reportNotice}</div>}
               {openComments[post.id] && <div className="comments-panel">
                 {(comments[post.id] || []).map(comment => <div className="feed-comment" key={comment.id}><b>{comment.author_name}</b><p>{comment.body}</p><small>{formatDate(comment.created_at)}</small></div>)}
                 <form className="comment-form" onSubmit={event => void createComment(event, post.id)}>
