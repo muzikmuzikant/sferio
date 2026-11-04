@@ -2,6 +2,7 @@ import express from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import sharp from 'sharp'
+import { userHasPermission } from './permissions.js'
 
 const postSchema = z.object({
   body: z.string().trim().min(1).max(5000),
@@ -106,6 +107,8 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
         })
       }
 
+      if (!(await userHasPermission(pool, req.user.id, 'posts.create', classId))) return res.status(403).json({ error: 'Недостатньо прав для публікації.' })
+
       await client.query('BEGIN')
       const postResult = await client.query(
         'INSERT INTO posts (author_id, class_id, body) VALUES ($1, $2, $3) RETURNING id, author_id, class_id, body, created_at',
@@ -170,6 +173,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
   router.post('/posts', requireAuth, contentLimiter, validate(postSchema), async (req, res, next) => {
     try {
       const { body, classId = null } = req.validatedBody
+      if (!(await userHasPermission(pool, req.user.id, 'posts.create', classId))) return res.status(403).json({ error: 'Недостатньо прав для публікації.' })
       if (classId) {
         const membership = await pool.query(
           'SELECT 1 FROM class_memberships WHERE class_id = $1 AND user_id = $2',
@@ -203,6 +207,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
       const parsedId = z.string().uuid().safeParse(req.params.postId)
       if (!parsedId.success) return res.status(400).json({ error: 'Некоректний допис.' })
       if (!(await visiblePost(parsedId.data, req.user.id))) return res.status(404).json({ error: 'Допис не знайдено.' })
+      if (!(await userHasPermission(pool, req.user.id, 'comments.create'))) return res.status(403).json({ error: 'Недостатньо прав для коментування.' })
       const result = await pool.query(
         'INSERT INTO post_comments (post_id, author_id, body) VALUES ($1, $2, $3) RETURNING id, post_id, author_id, body, created_at',
         [parsedId.data, req.user.id, req.validatedBody.body]
@@ -216,6 +221,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
       const parsedId = z.string().uuid().safeParse(req.params.postId)
       if (!parsedId.success) return res.status(400).json({ error: 'Некоректний допис.' })
       if (!(await visiblePost(parsedId.data, req.user.id))) return res.status(404).json({ error: 'Допис не знайдено.' })
+      if (!(await userHasPermission(pool, req.user.id, 'reactions.create'))) return res.status(403).json({ error: 'Недостатньо прав для реакцій.' })
       const result = await pool.query(
         'INSERT INTO post_reactions (post_id, user_id, reaction) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction, created_at = NOW() RETURNING post_id, reaction',
         [parsedId.data, req.user.id, req.validatedBody.reaction]
@@ -236,6 +242,7 @@ export function createPostsRouter({ pool, requireAuth, contentLimiter, reportLim
   router.post('/reports', requireAuth, reportLimiter, validate(reportSchema), async (req, res, next) => {
     try {
       const { postId = null, commentId = null, reason, details } = req.validatedBody
+      if (!(await userHasPermission(pool, req.user.id, 'reports.create'))) return res.status(403).json({ error: 'Недостатньо прав для скарг.' })
       if (postId) {
         if (!(await visiblePost(postId, req.user.id))) return res.status(404).json({ error: 'Допис не знайдено.' })
       } else {
