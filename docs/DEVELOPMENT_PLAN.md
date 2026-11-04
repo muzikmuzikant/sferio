@@ -45,8 +45,8 @@
 - [x] Member feed UI connected to posts, comments, reactions and photo uploads.
 - [x] Server JavaScript syntax check added to the build pipeline.
 - [ ] Complete the latest beta deployment and verify database/API health.
-- [ ] Configure the private school access-code hash in beta.
-- [ ] Claim the initial administrator account after creating its user account.
+- [x] Configure a private Argon2id school access-code hash in Railway beta (the actual code is not stored in GitHub).
+- [ ] Claim the initial administrator account after creating its user account using the one-time private bootstrap token.
 - [ ] Verify registration, sign-in, feed, class permissions and photo upload end to end.
 - [ ] Build profile pages and profile settings.
 - [ ] Build class pages and admin/moderation interfaces.
