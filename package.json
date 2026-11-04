@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run check:server && tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty",
     "start": "node server/index.js",
-    "db:init": "node server/init-db.js"
+    "db:init": "node server/init-db.js",
+    "check:server": "node --check server/index.js && node --check server/auth.js && node --check server/posts.js && node --check server/classes.js && node --check server/permissions.js && node --check server/db.js && node --check server/init-db.js"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
